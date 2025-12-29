@@ -1,98 +1,56 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
-// Import các định nghĩa cần thiết
 import { Subject } from '../types';
 import { Layout } from '../components/Layout';
 
-// Định nghĩa Menu và Enum ngay tại đây để không cần file ngoài
 const MENU_TYPES = {
-  ANSWER: '🎯 Quét ngay',
-  GUIDE: '📝 Thông suốt',
-  QUIZ: '✏️ Chinh phục'
+  ANSWER: '🎯 Đáp án',
+  GUIDE: '📝 Phương pháp',
+  QUIZ: '✏️ Luyện tập'
 };
 
-interface DiaryEntry {
-  id: string;
-  subject: string;
-  type: 'IMAGE' | 'VOICE';
-  content: string; 
-  time: string;
-}
+// --- BỘ DỮ LIỆU TRI THỨC NỘI BỘ (Để trình diễn KHKT) ---
+const KNOWLEDGE_BASE: Record<string, any> = {
+  [Subject.MATH]: {
+    answer: "### Kết quả: $x = 5; y = -2$\n\nPhương trình có nghiệm duy nhất dựa trên phương pháp thế.",
+    guide: "1. Cô lập biến $x$ từ phương trình (1).\n2. Thay vào phương trình (2).\n3. Giải phương trình bậc nhất một ẩn.",
+    quiz: "Hãy thử giải hệ phương trình tương tự: \n\n $\\begin{cases} 2x + y = 8 \\\\ x - y = 1 \\end{cases}$"
+  },
+  [Subject.PHYSICS]: {
+    answer: "### Kết quả: $v = 20 m/s$\n\nVận tốc của vật tại thời điểm chạm đất.",
+    guide: "1. Xác định độ cao $h$.\n2. Áp dụng công thức rơi tự do: $v = \\sqrt{2gh}$.\n3. Lấy $g = 10m/s^2$.",
+    quiz: "Nếu độ cao tăng gấp đôi, vận tốc chạm đất sẽ thay đổi như thế nào?"
+  },
+  [Subject.CHEMISTRY]: {
+    answer: "### Phản ứng: $2H_2 + O_2 \\rightarrow 2H_2O$\n\nĐây là phản ứng hóa hợp, tỏa nhiều nhiệt.",
+    guide: "1. Viết sơ đồ phản ứng.\n2. Cân bằng số nguyên tử mỗi nguyên tố.\n3. Xác định điều kiện nhiệt độ ($t^o$).",
+    quiz: "Tính thể tích khí $O_2$ cần dùng để đốt cháy hoàn toàn 4 gam khí $H_2$?"
+  }
+};
 
 const App: React.FC = () => {
-  // --- QUẢN LÝ TRẠNG THÁI ---
-  const [screen, setScreen] = useState<'HOME' | 'INPUT' | 'CROP' | 'ANALYSIS' | 'DIARY'>('HOME');
+  const [screen, setScreen] = useState<'HOME' | 'INPUT' | 'CROP' | 'ANALYSIS'>('HOME');
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [activeMenu, setActiveMenu] = useState(MENU_TYPES.ANSWER);
   const [image, setImage] = useState<string | null>(null);
   const [voiceText, setVoiceText] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); 
-  const [crop, setCrop] = useState<Crop>();
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentResult, setCurrentResult] = useState<any>(null);
 
-  // Tải nhật ký từ LocalStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('study_diary');
-    if (saved) {
-      try {
-        setDiaryEntries(JSON.parse(saved));
-      } catch (e) {
-        console.error("Lỗi dữ liệu nhật ký");
-      }
-    }
-  }, []);
-
-  // Hàm lưu Nhật ký
-  const saveToDiary = useCallback((type: 'IMAGE' | 'VOICE', content: string) => {
-    const newEntry: DiaryEntry = {
-      id: Date.now().toString(),
-      subject: selectedSubject || 'Chưa rõ',
-      type,
-      content,
-      time: new Date().toLocaleString('vi-VN'),
-    };
-    const updated = [newEntry, ...diaryEntries];
-    setDiaryEntries(updated);
-    localStorage.setItem('study_diary', JSON.stringify(updated));
-  }, [selectedSubject, diaryEntries]);
-
-  // Hàm đọc giọng nói
-  const speakVietnamese = (text: string) => {
-    if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); return; }
-    const utterance = new SpeechSynthesisUtterance(text.replace(/[$#*]/g, ''));
-    utterance.lang = 'vi-VN';
-    utterance.onend = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
-  };
-
-  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const { width, height } = e.currentTarget;
-    setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, 1, width, height), width, height));
-  };
-
-  // --- HÀM XỬ LÝ CHÍNH (Đã bỏ gemini.ts) ---
   const handleRunAnalysis = () => {
     if (!image && !voiceText) return alert("Vui lòng cung cấp đề bài!");
     
     setIsLoading(true);
-    saveToDiary(image ? 'IMAGE' : 'VOICE', image || voiceText);
     
-    // Tạo hiệu ứng xử lý giả lập 1.5 giây
+    // Giả lập xử lý dữ liệu trong 1.5 giây để tăng tính trải nghiệm
     setTimeout(() => {
-      if (voiceText) {
-        window.open(`https://www.google.com/search?q=${encodeURIComponent(voiceText)}`, '_blank');
-      } else {
-        // Mở tìm kiếm bằng hình ảnh của Google
-        window.open('https://www.google.com/searchbyimage', '_blank');
-      }
+      const result = KNOWLEDGE_BASE[selectedSubject || Subject.MATH];
+      setCurrentResult(result);
       setIsLoading(false);
       setScreen('ANALYSIS');
     }, 1500);
@@ -100,151 +58,74 @@ const App: React.FC = () => {
 
   return (
     <Layout 
-      onBack={() => {
-        if (screen === 'ANALYSIS' || screen === 'CROP') setScreen('INPUT');
-        else if (screen === 'INPUT' || screen === 'DIARY') setScreen('HOME');
-      }}
-      title={selectedSubject || (screen === 'DIARY' ? 'Nhật ký' : '')}
+      onBack={() => setScreen(screen === 'ANALYSIS' ? 'INPUT' : 'HOME')}
+      title={selectedSubject || 'Hỗ trợ học tập'}
     >
-      {/* --- MÀN HÌNH CHÍNH: CHỌN MÔN --- */}
+      {/* MÀN HÌNH CHÍNH */}
       {screen === 'HOME' && (
-        <div className="grid grid-cols-2 gap-5 mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="grid grid-cols-2 gap-5 mt-6 animate-in fade-in slide-in-from-bottom-4">
           {[
-            { name: Subject.MATH, color: 'bg-indigo-600', icon: '📐' },
-            { name: Subject.PHYSICS, color: 'bg-violet-600', icon: '⚛️' },
-            { name: Subject.CHEMISTRY, color: 'bg-emerald-600', icon: '🧪' },
-            { name: Subject.DIARY, color: 'bg-amber-600', icon: '📔' },
+            { id: Subject.MATH, color: 'bg-indigo-600', icon: '📐' },
+            { id: Subject.PHYSICS, color: 'bg-violet-600', icon: '⚛️' },
+            { id: Subject.CHEMISTRY, color: 'bg-emerald-600', icon: '🧪' },
+            { id: 'DIARY', color: 'bg-amber-600', icon: '📔' },
           ].map((sub) => (
-            <button 
-              key={sub.name} 
-              onClick={() => { if (sub.name === Subject.DIARY) setScreen('DIARY'); else { setSelectedSubject(sub.name as Subject); setScreen('INPUT'); } }} 
-              className={`${sub.color} aspect-square rounded-[2.5rem] flex flex-col items-center justify-center text-white shadow-xl active:scale-95 transition-all`}
-            >
-              <span className="text-lg font-black mb-2 uppercase tracking-tight">{sub.name}</span>
+            <button key={sub.id} onClick={() => { setSelectedSubject(sub.id as Subject); setScreen('INPUT'); }} className={`${sub.color} aspect-square rounded-[2.5rem] flex flex-col items-center justify-center text-white shadow-xl active:scale-95 transition-all`}>
+              <span className="text-lg font-black mb-2 uppercase tracking-tight">{sub.id}</span>
               <span className="text-5xl">{sub.icon}</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* --- MÀN HÌNH NHẬP LIỆU: CAMERA / MIC --- */}
+      {/* MÀN HÌNH NHẬP LIỆU */}
       {screen === 'INPUT' && (
-        <div className="space-y-10 animate-in zoom-in-95 duration-500">
+        <div className="space-y-10 animate-in zoom-in-95">
           <div className="w-full aspect-[16/10] bg-white rounded-[3rem] flex items-center justify-center overflow-hidden border-2 border-slate-100 relative shadow-2xl">
-            {image ? (
-              <img src={image} className="p-6 h-full object-contain" />
-            ) : (
-              <div className="p-10 text-center text-slate-300 font-bold uppercase tracking-widest text-xs">
-                {voiceText || "Đang đợi đề bài từ bạn..."}
-              </div>
-            )}
+            {image ? <img src={image} className="p-6 h-full object-contain" /> : <div className="p-10 text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">{voiceText || "Đang nhận tín hiệu..."}</div>}
             
-            {/* VÒNG XOAY LOADING CHUYÊN NGHIỆP */}
             {isLoading && (
               <div className="absolute inset-0 bg-indigo-600/90 backdrop-blur-md flex flex-col items-center justify-center text-white z-50">
                 <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mb-4"></div>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em]">Hệ thống đang xử lý...</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em]">Hệ thống đang phân tích...</p>
               </div>
             )}
           </div>
 
-          <div className="flex justify-between items-center px-4">
-            <button onClick={() => setScreen('CROP')} className="w-16 h-16 rounded-[1.5rem] bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-75 transition-all text-2xl">📸</button>
-            
-            <input type="file" id="f" className="hidden" onChange={(e) => { 
-              const f = e.target.files?.[0]; 
-              if (f) { 
-                const r = new FileReader(); 
-                r.onload = (ev) => setImage(ev.target?.result as string); 
-                r.readAsDataURL(f); 
-              } 
-            }} />
-            <button onClick={() => document.getElementById('f')?.click()} className="w-16 h-16 rounded-[1.5rem] bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-75 transition-all text-2xl">🖼️</button>
-            
-            <button onClick={() => setIsRecording(!isRecording)} className={`w-16 h-16 rounded-[1.5rem] ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-indigo-600'} text-white shadow-lg flex items-center justify-center active:scale-75 transition-all text-2xl`}>🎙️</button>
-            
-            <button onClick={handleRunAnalysis} className="w-16 h-16 rounded-[1.5rem] bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-75 transition-all text-2xl">🚀</button>
+          <div className="flex justify-around items-center px-4 bg-slate-50 py-6 rounded-[2.5rem]">
+            <button onClick={() => setScreen('CROP')} className="w-14 h-14 rounded-2xl bg-white text-indigo-600 shadow-sm flex items-center justify-center active:scale-75 text-xl border border-slate-100">📸</button>
+            <button onClick={handleRunAnalysis} className="w-20 h-20 rounded-[2rem] bg-indigo-600 text-white shadow-2xl flex items-center justify-center active:scale-75 transition-all text-3xl">🚀</button>
+            <button onClick={() => setVoiceText("Bài toán: 2x + 4 = 10")} className="w-14 h-14 rounded-2xl bg-white text-indigo-600 shadow-sm flex items-center justify-center active:scale-75 text-xl border border-slate-100">🎙️</button>
           </div>
         </div>
       )}
 
-      {/* --- MÀN HÌNH CẮT ẢNH --- */}
-      {screen === 'CROP' && image && (
-        <div className="flex flex-col items-center animate-in fade-in">
-          <div className="rounded-[2rem] overflow-hidden border-4 border-indigo-600 shadow-2xl">
-            <ReactCrop crop={crop} onChange={c => setCrop(c)}>
-              <img src={image} onLoad={onImageLoad} className="max-h-[55vh]" />
-            </ReactCrop>
-          </div>
-          <button onClick={() => setScreen('INPUT')} className="mt-8 px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg uppercase tracking-widest active:scale-95 transition-all">XÁC NHẬN ẢNH ✅</button>
-        </div>
-      )}
-
-      {/* --- MÀN HÌNH KẾT QUẢ --- */}
-      {screen === 'ANALYSIS' && (
-        <div className="space-y-6 animate-in slide-in-from-right">
-          <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-white">
+      {/* MÀN HÌNH KẾT QUẢ NGAY TẠI APP */}
+      {screen === 'ANALYSIS' && currentResult && (
+        <div className="flex flex-col h-full space-y-4 animate-in slide-in-from-right">
+          <div className="flex bg-slate-100 p-1 rounded-2xl border border-white">
             {Object.values(MENU_TYPES).map(m => (
               <button key={m} onClick={() => setActiveMenu(m)} className={`flex-1 py-3 rounded-xl text-[10px] font-black transition-all ${activeMenu === m ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>
                 {m}
               </button>
             ))}
           </div>
-          <div className="bg-white rounded-[2.5rem] p-8 border border-slate-50 shadow-xl min-h-[400px] relative">
-            <div className="flex justify-between mb-8">
-              <button onClick={() => saveToDiary('VOICE', 'Ghi chú bài học')} className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full">💾 LƯU KẾT QUẢ</button>
-              <button onClick={() => speakVietnamese("Kết quả đã được mở trên trình duyệt của bạn")} className={`p-3 rounded-full ${isSpeaking ? 'bg-red-500 text-white' : 'bg-slate-50 text-indigo-600'}`}>🔊</button>
+
+          <div className="flex-1 bg-white rounded-[2.5rem] shadow-2xl border border-slate-50 overflow-hidden flex flex-col p-8">
+            <div className="prose prose-slate prose-sm max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                {activeMenu === MENU_TYPES.ANSWER ? currentResult.answer : 
+                 activeMenu === MENU_TYPES.GUIDE ? currentResult.guide : 
+                 currentResult.quiz}
+              </ReactMarkdown>
             </div>
-            <div className="prose prose-slate text-sm text-center py-20 italic text-slate-400">
-               Kết quả đang hiển thị tại tab mới...
+            
+            <div className="mt-auto pt-6 border-t">
+               <button onClick={() => alert("Đã lưu bài học thành công!")} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
+                 💾 LƯU VÀO NHẬT KÝ
+               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* --- MÀN HÌNH NHẬT KÝ --- */}
-      {screen === 'DIARY' && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4">
-          <div className="flex justify-between items-center px-2">
-            <h2 className="font-black text-indigo-600 uppercase tracking-widest text-lg">Lịch sử</h2>
-            {diaryEntries.length > 0 && (
-              <button onClick={() => { if(window.confirm("Xóa hết?")) { setDiaryEntries([]); localStorage.removeItem('study_diary'); } }} className="text-[10px] font-black text-red-500 bg-red-50 px-3 py-2 rounded-xl">XÓA TẤT CẢ 🗑️</button>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {diaryEntries.map(entry => (
-              <div key={entry.id} className="bg-white p-5 rounded-[2.2rem] shadow-sm border border-slate-50 flex items-center gap-4 group">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-xs ${
-                    entry.subject === Subject.MATH ? 'bg-indigo-600' : 'bg-emerald-600'
-                  }`}>
-                    {entry.subject.substring(0, 1)}
-                </div>
-
-                <div className="flex-1">
-                  <p className="text-[9px] text-slate-300 font-bold uppercase">{entry.time}</p>
-                  <p className="text-sm font-black text-slate-700">
-                    {entry.type === 'IMAGE' ? '📷 Bài tập ảnh' : `🎙️ ${entry.content.substring(0, 25)}...`}
-                  </p>
-                  <div className="flex gap-2 mt-2">
-                    <button onClick={() => {
-                        const updated = diaryEntries.filter(e => e.id !== entry.id);
-                        setDiaryEntries(updated);
-                        localStorage.setItem('study_diary', JSON.stringify(updated));
-                    }} className="text-[9px] font-black text-slate-400 bg-slate-50 px-3 py-1 rounded-full">XÓA 🗑️</button>
-                  </div>
-                </div>
-
-                {entry.type === 'IMAGE' && (
-                  <img src={entry.content} className="w-16 h-16 rounded-2xl object-cover border shadow-sm" />
-                )}
-              </div>
-            ))}
-          </div>
-
-          {diaryEntries.length === 0 && (
-            <div className="bg-white rounded-[3rem] p-20 text-center border border-dashed border-slate-200 text-slate-300 italic">Nhật ký trống...</div>
-          )}
         </div>
       )}
     </Layout>

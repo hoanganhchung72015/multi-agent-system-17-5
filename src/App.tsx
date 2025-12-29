@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { Subject } from '../types';
-import { Layout } from '../components/Layout';
+import { Subject } from './types';
+import { Layout } from './components/Layout';
 
 const MENU_TYPES = {
   ANSWER: '🎯 ĐÁP ÁN & CASIO',
@@ -149,4 +149,35 @@ const App: React.FC = () => {
 
       {/* 4. MÀN HÌNH KẾT QUẢ (ANALYSIS) */}
       {screen === 'ANALYSIS' && (
-        <div className="flex flex-col h-[78vh] space-y-4
+        <div className="flex flex-col h-[78vh] space-y-4 animate-in slide-in-from-right duration-500">
+          {/* Tabs menu */}
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-white shadow-inner">
+            {Object.values(MENU_TYPES).map(m => (
+              <button 
+                key={m} 
+                onClick={() => setActiveMenu(m)} 
+                className={`flex-1 py-3 rounded-xl text-[8px] font-black transition-all ${activeMenu === m ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          
+          {/* Khung hiển thị AI (Kỹ thuật Clipping ẩn Header Bing) */}
+          <div className="flex-1 bg-white border-4 border-indigo-600 rounded-[3.5rem] overflow-hidden shadow-2xl relative">
+             <div style={{ width: '100%', height: '100%', marginTop: '-140px' }}> 
+                <iframe 
+                   src={activeMenu === MENU_TYPES.ANSWER ? aiUrls.ans : activeMenu === MENU_TYPES.GUIDE ? aiUrls.guide : aiUrls.quiz} 
+                   className="w-full"
+                   style={{ height: 'calc(100% + 140px)' }}
+                   title="AI Expert Result"
+                ></iframe>
+             </div>
+          </div>
+        </div>
+      )}
+    </Layout>
+  );
+};
+
+export default App;

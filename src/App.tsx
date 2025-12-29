@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { Subject } from './types';
-import { Layout } from './components/Layout';
+import { Subject } from '../types';
+import { Layout } from '../components/Layout';
 
 const MENU_TYPES = {
   ANSWER: '🎯 ĐÁP ÁN & CASIO',

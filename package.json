@@ -17,7 +17,10 @@
     "@google/generative-ai": "latest",
     "lucide-react": "latest",
     "clsx": "latest",
-    "tailwind-merge": "latest"
+    "tailwind-merge": "latest",
+"autoprefixer": "^10.4.19",
+  "postcss": "^8.4.38"
+    
   },
   "devDependencies": {
     "typescript": "^5",
@@ -30,3 +33,4 @@
     "eslint-config-next": "14.2.3"
   }
 }
+

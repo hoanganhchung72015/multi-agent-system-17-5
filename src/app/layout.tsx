@@ -1,22 +1,28 @@
+export const runtime = 'edge';
+
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "Hệ sinh thái học tập thông minh",
-  description: "Ứng dụng hỗ trợ học tập cá nhân hóa",
+  title: "Gemini Study App",
+  description: "Giải bài tập cùng AI",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="vi">
-      <body className={inter.className}>{children}</body>
+<head>
+        {/* Dòng này sẽ kéo Tailwind trực tiếp từ máy chủ Google/Tailwind về */}
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      
+      <body className="antialiased">
+        {children}
+      </body>
     </html>
   );
 }
